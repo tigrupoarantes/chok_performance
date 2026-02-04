@@ -7,12 +7,12 @@ def query_vendas(filtro_perfil=None, data_inicio=None, data_fim=None):
         vendedor.nome_gue AS vendedor,
         cliente.nome AS cliente,
         SUM(it_pedv.vl_venda) AS vl_venda
-    FROM MOINHO.dbo.ped_vda ped_vda
-    INNER JOIN MOINHO.dbo.it_pedv it_pedv
+    FROM ped_vda ped_vda
+    INNER JOIN it_pedv it_pedv
         ON it_pedv.nu_ped = ped_vda.nu_ped
-    INNER JOIN MOINHO.dbo.vendedor vendedor
+    INNER JOIN vendedor vendedor
         ON vendedor.cd_vend = ped_vda.cd_vend
-    INNER JOIN MOINHO.dbo.cliente cliente
+    INNER JOIN cliente cliente
         ON cliente.cd_clien = ped_vda.cd_clien
     WHERE ped_vda.situacao NOT IN ('CA','RB','DV')
     """
