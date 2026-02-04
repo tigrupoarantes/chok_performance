@@ -40,15 +40,32 @@ def get_connection():
 def execute_query(sql, params=None):
     """Executa SQL bruto usando psycopg2 (compatível com Postgres/Supabase).
 
+    Função suporta conexões psycopg2 (RealDictCursor) e fallback para drivers
+    compatíveis com DB-API que retornam tuplas (ex.: pyodbc).
     Use este método quando precisar rodar queries complexas/join.
     """
     conn = get_connection()
     try:
-        # RealDictCursor retorna dicionários (útil para jsonify)
-        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+        # Primeiro, tente usar o RealDictCursor (psycopg2)
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(sql, params or ())
+                rows = cursor.fetchall()
+                return [dict(row) for row in rows]
+        except TypeError:
+            # Fallback para drivers que não aceitam 'cursor_factory' (pyodbc, etc.)
+            cursor = conn.cursor()
             cursor.execute(sql, params or ())
+
+            columns = [col[0] for col in cursor.description] if cursor.description else []
             rows = cursor.fetchall()
-            return [dict(row) for row in rows]
+
+            resultado = []
+            for row in rows:
+                resultado.append(dict(zip(columns, row)))
+
+            cursor.close()
+            return resultado
     finally:
         conn.close()
 
@@ -104,4 +121,4 @@ if __name__ == "__main__":
         print("Teste via Supabase SDK: listando clientes (até 5)")
         print(list_table("cliente", limit=5))
     else:
-        print("Supabase SDK não configurado")"},{ 
+        print("Supabase SDK não configurado")
