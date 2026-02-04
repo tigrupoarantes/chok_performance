@@ -1,10 +1,57 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
-from auth import autenticar
+from auth import autenticar, criar_usuario_supabase, remover_usuario_supabase
 from queries import query_vendas
-from database import execute_query
+from database import execute_query, get_supabase_client
 
 app = Flask(__name__)
-app.secret_key = "chave-super-secreta-123"  # depois podemos melhorar
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "chave-super-secreta-123")  # pode ser configurada via env
+
+
+# ----------------------
+# Rotas administrativas (apenas para perfil 'gerencia')
+# ----------------------
+@app.route('/admin/usuarios', methods=['POST'])
+def admin_create_usuario():
+    if 'usuario' not in session or session.get('perfil') != 'gerencia':
+        return jsonify({'erro': 'não autorizado'}), 403
+
+    usuario = request.form.get('usuario') or request.json.get('usuario') if request.is_json else request.form.get('usuario')
+    senha = request.form.get('senha') or request.json.get('senha') if request.is_json else request.form.get('senha')
+    perfil = request.form.get('perfil') or request.json.get('perfil') if request.is_json else request.form.get('perfil') or 'vendedor'
+
+    if not usuario or not senha:
+        return jsonify({'erro': 'usuario e senha são obrigatórios'}), 400
+
+    try:
+        res = criar_usuario_supabase(usuario, senha, perfil=perfil)
+        return jsonify({'ok': True, 'data': res}), 201
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+@app.route('/admin/usuarios/<usuario>', methods=['DELETE'])
+def admin_delete_usuario(usuario):
+    if 'usuario' not in session or session.get('perfil') != 'gerencia':
+        return jsonify({'erro': 'não autorizado'}), 403
+
+    try:
+        res = remover_usuario_supabase(usuario)
+        return jsonify({'ok': True, 'data': res}), 200
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
+
+
+@app.route('/health')
+def health():
+    """Health check endpoint. Verifica se o app está vivo e se o cliente Supabase está configurado."""
+    try:
+        client = get_supabase_client()
+        supabase_ok = bool(client)
+        return jsonify({"status": "ok", "supabase": supabase_ok})
+    except Exception as e:
+        return jsonify({"status": "error", "detail": str(e)}), 500
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -47,6 +94,35 @@ def api_vendas():
     data_inicio = request.args.get("data_inicio")
     data_fim = request.args.get("data_fim")
 
+    # Tenta usar Supabase SDK + materialized view `mv_vendas_pedido` quando disponível
+    try:
+        client = get_supabase_client()
+        if client:
+            query = client.table("mv_vendas_pedido").select("*")
+
+            # Filtro por perfil
+            if perfil == "vendedor":
+                query = query.eq("cd_vend", codigo)
+            elif perfil == "supervisor":
+                query = query.eq("cd_vend", codigo)  # ajuste conforme sua modelagem de supervisor
+
+            # Filtro por datas
+            if data_inicio:
+                query = query.gte("dt_ped", data_inicio)
+            if data_fim:
+                query = query.lte("dt_ped", data_fim)
+
+            # Ordenação
+            query = query.order("dt_ped", desc=True)
+
+            res = query.execute()
+            dados = getattr(res, "data", [])
+            return jsonify(dados)
+    except Exception:
+        # Se houver qualquer problema com o SDK, faz fallback para SQL bruto
+        pass
+
+    # Fallback: executar SQL tradicional (psycopg2/SQL Server conforme configuração)
     filtro = None
 
     if perfil == "vendedor":
