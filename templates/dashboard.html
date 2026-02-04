@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard de Vendas</title>
+</head>
+<body>
+
+    <h1>Dashboard de Vendas</h1>
+
+    <table border="1" id="tabela-vendas">
+        <thead>
+            <tr>
+                <th>Nº Pedido</th>
+                <th>Data</th>
+                <th>Vendedor</th>
+                <th>Cliente</th>
+                <th>Valor</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td colspan="5">Carregando...</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <br>
+    <a href="/logout">Sair</a>
+
+    <!-- IMPORTANTE -->
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+
+</body>
+</html>
